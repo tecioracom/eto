@@ -1,0 +1,271 @@
+/* ============================================================================
+ * サンプルサイト（/[locale]/samples 配下）専用のスコープ。
+ * `src/app/[locale]/samples/layout.tsx` からのみ import する。
+ *
+ * ■ 2階建てにする
+ *   `.sample-shell`  … ハブ・画面設計ページ・8本の実装、全部に掛かる外側。
+ *                      変数の器と color-scheme だけを持つ。
+ *   `.sample-<slug>` … 1本ぶんの配色・書体。**Teciora のトークンを参照しない。**
+ *                      8本が「同じ人が作った1サイト」に見えないための線。
+ *
+ * ■ ここで絶対に宣言しないもの
+ *   overflow / transform / filter / backdrop-filter / contain / will-change。
+ *   1つでも入ると、子孫の position: sticky が**無言で**効かなくなる
+ *   （管理画面のサイドバーと予約の集計パネルが sticky）。検査 [10] が見ている。
+ *
+ * ■ 新しい1本を足すときにやること（他の7本の担当へ）
+ *   1. この下に `.sample-<slug>` を1ブロック足す。
+ *      必ず `--focus-ring` を自分の色で上書きすること。上書きを忘れると
+ *      Teciora のシアン（#00D1FF）が漏れて、配色を分けた意味が消える。
+ *   2. 見出しの `font-family: inherit` を書く。globals.css の
+ *      `h1,h2,h3,h4 { @apply font-display }` を打ち消すため。
+ *      samples.css は @layer に入っていないので、レイヤ付きの base より強い。
+ *   3. 和文の大きな見出しは **マイナス字間**（h1 -0.02em / h2 -0.01em）。
+ *      欧文のオーバーラインは正のまま（別物なので触らない）。
+ *   4. 幅の指定に `ch` を使わない。「0」の字幅なので和文では効かない
+ *      （同じ 62ch が書体によって 39 字にも 31 字にもなる）。`em` を使う。
+ * ==========================================================================*/
+
+.sample-shell {
+  /*
+   * 端末のダークモードで、UA が描く部品だけが黒くなる事故を止める。
+   * 8本とも明るい配色しか持たず `dark:` は1つも書いていない。
+   * 宣言が無いと <select>・チェックボックス・スクロールバーなど
+   * **UA が描くものだけ**が OS の設定に従って暗転し、配色が混ざる。
+   * ダークモードを作る宣言ではなく、作っていないことを宣言するための1行。
+   */
+  color-scheme: light;
+
+  /* 各サイトのヘッダー高。ページ内アンカーの scroll-margin-top が参照する。 */
+  --site-header-h: 56px;
+  --site-anchor-offset: calc(var(--site-header-h) + 16px);
+}
+
+@media (min-width: 768px) {
+  .sample-shell {
+    --site-header-h: 64px;
+  }
+}
+
+
+.sample-shell [id] {
+  scroll-margin-top: var(--site-anchor-offset);
+}
+
+/* ------------------------------------------------------------------
+ * ⚠ 濃い面の上の文字色について（8本共通の落とし穴）
+ * ------------------------------------------------------------------
+ * **`text-[var(--cream)]/80` は効かない。**
+ * Tailwind は不透明度つきの任意値を `rgb(var(--cream) / 0.8)` に展開する。
+ * 変数の中身が `#F3F0E8` のような色表記だと、この宣言は**無効**になって
+ * 丸ごと捨てられ、文字色は**継承した色**になる。
+ * `.sample-<slug> { color: var(--ink) }` を継承するので、
+ * **濃い面の上に濃い文字**が出る（ヒーローの和文が消える、で実際に踏んだ）。
+ * しかも親がたまたま明るい色を指定している場所では正しく見えるので、
+ * 画面によって出たり出なかったりする。
+ *
+ * 濃い面に載せる文字は、**不透明度を焼き込んだ変数**を使うこと。
+ * 各サイトが `--on-dark-*` を自分の地色で定義する（下の .sample-nagi 参照）。
+ * Teciora 自身の面（SiteFooter・アウトロ帯）は本体のトークンなので
+ * `text-white/80` のままでよい（`white` は実在のパレット色）。
+ * 検査 [S4] が `色-[var(--…)]/数字` の並びを禁止している。
+ * ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------
+ * 入力欄のフォーカスリング（8本共通）
+ * ------------------------------------------------------------------
+ * @tailwindcss/forms は input / select / textarea の :focus に
+ * `outline: 2px solid transparent` を当てる（リングは box-shadow で描く前提）。
+ * サンプル側はその既定リング（Tailwind の青）を消しているので、
+ * globals.css の `:where(...)` 規則（詳細度 0）は forms の規則に勝てず、
+ * **入力欄だけフォーカスリングが存在しない**状態になる。
+ * 枠線の色替えだけでは、フォーカス位置が 1px の色差でしか分からない。
+ * samples 配下に限って、各サイトの --focus-ring で描き直す。
+ * ------------------------------------------------------------------ */
+.sample-body :is(input, select, textarea, button, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring, #173c3b);
+  outline-offset: 2px;
+}
+
+/* 濃い面（管理画面のサイドバーなど）の上では、リングを明るい側に振る。 */
+.sample-body .site-on-dark :is(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring-dark, #ffffff);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------
+ * 孤立行（行末に1〜2文字だけ残る行）について
+ * ------------------------------------------------------------------
+ * `text-wrap: pretty` を当てて実測したが、和文では行の割れ方が1文字も
+ * 変わらなかった。効かない指定を「対策した」体で残さない。孤立行は
+ * 行長（max-w の和字数）と文の長さの組み合わせで決まるので、直すときは
+ * そのどちらかを動かすこと。
+ * ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------
+ * 横スクロールする器（表・カレンダー）の共通クラス。
+ * overflow は **この要素自身** に付く。祖先には絶対に付けない。
+ * ------------------------------------------------------------------ */
+.sample-body .site-scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ------------------------------------------------------------------
+ * 動きを減らす設定のときは、ループ動画を出さない（`SiteVideo`）。
+ * Figma の `NAGI / Motion & interaction guide` の指定
+ * （「動きを減らす設定ではズームと移動を無効化」）。
+ *
+ * 歯止めは2つある。1つめは `<source media="(prefers-reduced-motion:
+ * no-preference)">` で、**資源選択の段階で候補が0本になる**ので
+ * 1バイトも取りに行かない。ここはその2つめで、`media` 属性を無視する
+ * 実装が仮にあっても動くものを出さないための保険である。
+ *
+ * **動画を消してもヒーローは空にならない。**ポスターは器の
+ * `background-image` にも置いてあり（`SiteVideo` のインラインスタイル）、
+ * 同じ URL なので取得は1回で済む。
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .sample-body .site-video-motion {
+    display: none;
+  }
+}
+
+
+
+/* ============================================================================
+ * éto — ひとりずつ施術するプライベートのネイルサロン
+ *
+ * グレージュ #F6F3F7 からライラック #EAE3F1。高彩度のピンクも黒のラメも使わない。
+ * 主色は灰みの紫 #6E5F7A、管理画面の柱だけ濃い李 #342D3B。
+ *
+ * ■ --green と --accent を分ける理由はすえと同じ
+ *   AdminShell はサイドバーの地に `--green` を読む。サロンの柱は濃い李、
+ *   押すボタンは中間の紫なので、2つを別に持つ。
+ * ==========================================================================*/
+.sample-eto {
+  --green: #342d3b; /* 管理画面の柱。白文字 11.6:1 */
+  --green-deep: #262029;
+  --accent: #6e5f7a; /* 主色。白文字 6.0:1 */
+  --accent-deep: #574a63; /* ホバー。白文字 8.1:1 */
+  --cream: #f6f3f7; /* 地（グレージュ） */
+  --paper: #ffffff;
+  --ink: #2c2830; /* 対 --cream 13.2:1 */
+  --sub: #625c69; /* 対 --cream 5.9:1 */
+  --line: #e2dce8;
+  --line-strong: #c9c2d1;
+  --soft: #eae3f1; /* ライラックの面（選択中・受付内容） */
+  --soft-ink: #3a3243; /* 対 --soft 9.8:1 */
+  --alert: #b03a2e; /* 対 --cream 5.5:1 / 白文字 6.0:1 */
+  --focus-ring: #6e5f7a;
+  --focus-ring-dark: #f6f3f7;
+  --field-radius: 2px;
+
+  /* 濃い李（#342D3B）の上の文字。不透明度は焼き込む。 */
+  --on-dark-strong: rgba(246, 243, 247, 0.94);
+  --on-dark-soft: rgba(246, 243, 247, 0.8);
+  --on-dark-faint: rgba(246, 243, 247, 0.68);
+  --on-dark-line: rgba(246, 243, 247, 0.24);
+  --on-dark-line-strong: rgba(246, 243, 247, 0.5);
+  --on-dark-fill: rgba(246, 243, 247, 0.1);
+
+  font-family: var(--font-noto-sans-jp), 'Hiragino Sans', 'Noto Sans JP',
+    'Yu Gothic', sans-serif;
+  color: var(--ink);
+}
+
+.sample-eto h1,
+.sample-eto h2,
+.sample-eto h3,
+.sample-eto h4,
+.sample-eto h5 {
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.sample-eto h1 {
+  letter-spacing: -0.02em;
+}
+.sample-eto h2 {
+  letter-spacing: -0.01em;
+}
+
+/*
+ * 欧文の大見出しとワードマーク（Playfair Display）。
+ * é は latin サブセットに入っている。**欧文だけの文字列に付けること。**
+ */
+.sample-eto .eto-display {
+  font-family: var(--font-eto-serif), 'Didot', 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+.sample-eto .eto-wordmark {
+  font-family: var(--font-eto-serif), 'Didot', 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.sample-eto .eto-label {
+  letter-spacing: 0.16em; /* 欧文のオーバーラインなので正のまま */
+}
+.sample-eto .eto-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/*
+ * 手元・デザイン・施術室の地（2026-09-18 に写真を入れた）。
+ * `public/samples/eto/` の写真がこの上に `<img>` で乗る（`SitePhoto`）。
+ * **クラスは残してある**: 写真が届くまで／読み込みに失敗したときに、
+ * 面の明度が動かないため。
+ *
+ * ■ 8本で唯一、人体が写る（手元だけ）
+ *   素材台帳の条件 (b)「人体を一切出さない」の**唯一の例外**。
+ *   ネイルサロンの施術対象が手元であり、書き出しもそうなっている。
+ *   顔・頭・肩は1枚も写さない。
+ */
+.sample-eto .eto-hand {
+  background: linear-gradient(
+    150deg,
+    #dfe3e8 0%,
+    #cdd3da 46%,
+    #b6bcc4 78%,
+    #9aa0a8 100%
+  );
+}
+.sample-eto .eto-room {
+  background: linear-gradient(
+    160deg,
+    #e5dcec 0%,
+    #cfc2dc 44%,
+    #a99bba 100%
+  );
+}
+.sample-eto .eto-nail-1 {
+  background: linear-gradient(150deg, #cfcabd 0%, #d8c3bb 58%, #b9a49c 100%);
+}
+.sample-eto .eto-nail-2 {
+  background: linear-gradient(150deg, #efe6f0 0%, #ddcfe2 58%, #c2b0ca 100%);
+}
+.sample-eto .eto-nail-3 {
+  background: linear-gradient(150deg, #ddd2ea 0%, #d6c7b4 58%, #b6a894 100%);
+}
+
+/* ------------------------------------------------------------------
+ * `<select>` は、いちばん長い選択肢より狭くならない（FREQ. / すえ / éto）
+ * ------------------------------------------------------------------
+ * 上の .sample-breadday と同じ理由。Chromium は `<select>` の使用幅を
+ * いちばん長い option の幅で下から押さえるので、共有部品の `w-full`
+ * （width:100%）を書いても使用値は option の幅のままになり、
+ * **ページ全体に横スクロールが出る**。`min-width:0` も `text-overflow` も
+ * 効かず、効くのは max-width だけ。
+ *
+ * この3本は選択肢の文字列が長い:
+ *   すえ    … 都道府県（47）・配送希望「最短でお届け / 時間指定なし」
+ *   éto     … メニュー「90分 / ¥8,800」・ご来店日「2026年10月3日（土）」
+ *   FREQ.   … 公開・販売状態「公開中・販売停止」
+ * 共通側は他の担当と衝突するので触らず、自分のスコープにだけ掛ける。
+ * ------------------------------------------------------------------ */
+.sample-eto select {
+  max-width: 100%;
+}
